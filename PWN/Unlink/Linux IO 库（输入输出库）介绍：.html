@@ -1,0 +1,80 @@
+<p>Linux I&#x2F;O 库（输入&#x2F;输出库）介绍：</p>
+<p>IO库 是操作系统提供用于管理数据输入和输出的一组函数和工具。它们通过封装底层系统调用（如 read 、write 、open等），为用户提供更高效、便捷的接口，同时优化性能（如缓冲区管理）。</p>
+<p>FILE 介绍：</p>
+<p>FILE 在 Linux 系统的标准IO库中是用来描述文件的结构，称为文件流。FILE结构在程序执行 fopen</p>
+<p> 等函数时会进行创建，<u>并分配在堆中</u>。我们常定义一个指向FILE结构的指针来接收这个返回值。</p>
+<p>FILE 结构定义在 libio.h 中 ，如下所示：</p>
+<pre><code class="language-c">struct _IO_FILE {
+  int _flags;       /* High-order word is _IO_MAGIC; rest is flags. */
+#define _IO_file_flags _flags
+
+  /* The following pointers correspond to the C++ streambuf protocol. */
+  /* Note:  Tk uses the _IO_read_ptr and _IO_read_end fields directly. */
+  char* _IO_read_ptr;   /* Current read pointer */
+  char* _IO_read_end;   /* End of get area. */
+  char* _IO_read_base;  /* Start of putback+get area. */
+  char* _IO_write_base; /* Start of put area. */
+  char* _IO_write_ptr;  /* Current put pointer. */
+  char* _IO_write_end;  /* End of put area. */
+  char* _IO_buf_base;   /* Start of reserve area. */
+  char* _IO_buf_end;    /* End of reserve area. */
+  /* The following fields are used to support backing up and undo. */
+  char *_IO_save_base; /* Pointer to start of non-current get area. */
+  char *_IO_backup_base;  /* Pointer to first valid character of backup area */
+  char *_IO_save_end; /* Pointer to end of non-current get area. */
+
+  struct _IO_marker *_markers;
+
+  struct _IO_FILE *_chain;
+
+  int _fileno;
+#if 0
+  int _blksize;
+#else
+  int _flags2;
+#endif
+  _IO_off_t _old_offset; /* This used to be _offset but it&#39;s too small.  */
+
+#define __HAVE_COLUMN /* temporary */
+  /* 1+column number of pbase(); 0 is unknown. */
+  unsigned short _cur_column;
+  signed char _vtable_offset;
+  char _shortbuf[1];
+
+  /*  char* _save_gptr;  char* _save_egptr; */
+
+  _IO_lock_t *_lock;
+#ifdef _IO_USE_OLD_IO_FILE
+};
+struct _IO_FILE_complete
+{
+  struct _IO_FILE _file;
+#endif
+#if defined _G_IO_IO_FILE_VERSION &amp;&amp; _G_IO_IO_FILE_VERSION == 0x20001
+  _IO_off64_t _offset;
+# if defined _LIBC || defined _GLIBCPP_USE_WCHAR_T
+  /* Wide character stream stuff.  */
+  struct _IO_codecvt *_codecvt;
+  struct _IO_wide_data *_wide_data;
+  struct _IO_FILE *_freeres_list;
+  void *_freeres_buf;
+# else
+  void *__pad1;
+  void *__pad2;
+  void *__pad3;
+  void *__pad4;
+
+  size_t __pad5;
+  int _mode;
+  /* Make sure we don&#39;t get into trouble again.  */
+  char _unused2[15 * sizeof (int) - 4 * sizeof (void *) - sizeof (size_t)];
+#endif
+};
+</code></pre>
+<p>进程中的 FILE 结构会通过 _chain 域彼此连接形成以一个链表，链表头部用全局变量 _IO_list_all 表示，通过这个值我们可以遍历所有的 FILE 结构。</p>
+<p>在标准 I&#x2F;O库中 ，每个程序启动时有三个文件流是自动打开的：stdin、stdout、stderr。因此在初始状态下，_IO_list_all 指向了一个有这些文件流构成的链表，但是需要注意的是这三个文件流位于 libc.so 的数据段 。而我们使用的 fopen 创建的文件流是分配在堆内存上的。</p>
+<p>我们可以在 libc.so 中找到 stdin\stdout\stderr 等符号，这些符号是指向 FILE 结构的指针，真正结构的符号是</p>
+<pre><code class="language-c">_IO_2_1_stderr_
+_IO_2_1_stdout_
+_IO_2_1_stdin_
+</code></pre>
